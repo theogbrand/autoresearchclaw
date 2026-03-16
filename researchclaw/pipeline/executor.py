@@ -2654,8 +2654,8 @@ def _execute_code_generation(
         )
         try:
             review_resp = llm.chat(
+                [{"role": "user", "content": review_prompt}],
                 system="You are a meticulous ML code reviewer. Be strict.",
-                user=review_prompt,
                 max_tokens=2048,
             )
             # Extract JSON from LLM response (may be wrapped in markdown fences)
@@ -2713,7 +2713,7 @@ def _execute_code_generation(
                     try:
                         fix_resp = _chat_with_prompt(
                             llm,
-                            _pm.prompts["code_generation"]["system"],
+                            _pm.system("code_generation"),
                             fix_prompt,
                             max_tokens=_code_max_tokens,
                         )
@@ -2759,11 +2759,11 @@ def _execute_code_generation(
         )
         try:
             align_resp = llm.chat(
+                [{"role": "user", "content": align_prompt}],
                 system="You are a scientific code reviewer checking topic-experiment alignment.",
-                user=align_prompt,
                 max_tokens=1024,
             )
-            align_data = _safe_json_loads(align_resp, {})
+            align_data = _safe_json_loads(align_resp.content, {})
             if isinstance(align_data, dict) and not align_data.get("aligned", True):
                 alignment_ok = False
                 alignment_note = align_data.get("reason", "Misaligned")
@@ -2788,11 +2788,11 @@ def _execute_code_generation(
                 )
                 regen_resp = _chat_with_prompt(
                     llm,
-                    system=_pm.prompts["code_generation"]["system"],
+                    system=_pm.system("code_generation"),
                     user=regen_prompt,
                     max_tokens=_code_max_tokens,
                 )
-                regen_files = _extract_multi_file_blocks(regen_resp)
+                regen_files = _extract_multi_file_blocks(regen_resp.content)
                 if regen_files and "main.py" in regen_files:
                     files = regen_files
                     for fname, code in files.items():
@@ -2815,11 +2815,11 @@ def _execute_code_generation(
                 '{"has_duplicates": true/false, "details": "which conditions are identical"}'
             )
             abl_resp = llm.chat(
+                [{"role": "user", "content": ablation_prompt}],
                 system="You are a code reviewer checking experimental conditions.",
-                user=ablation_prompt,
                 max_tokens=512,
             )
-            abl_data = _safe_json_loads(abl_resp, {})
+            abl_data = _safe_json_loads(abl_resp.content, {})
             if isinstance(abl_data, dict) and abl_data.get("has_duplicates"):
                 logger.warning(
                     "Stage 10: Duplicate ablation conditions detected: %s",
@@ -6761,7 +6761,9 @@ def execute_stage(
                     )
                     break
 
-    if gate_required(stage, config.security.hitl_required_stages):
+    if result.status == StageStatus.DONE and gate_required(
+        stage, config.security.hitl_required_stages
+    ):
         if auto_approve_gates:
             if bridge.use_memory:
                 adapters.memory.append("gates", f"{run_id}:{int(stage)}:auto-approved")

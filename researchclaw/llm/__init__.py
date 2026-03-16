@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
@@ -58,7 +59,11 @@ def create_llm_client(config: RCConfig) -> LLMClient | ACPClient:
     return _LLM(
         LLMConfig(
             base_url=base_url,
-            api_key=config.llm.api_key,
+            api_key=(
+                config.llm.api_key
+                or os.environ.get(config.llm.api_key_env, "")
+                or ""
+            ),
             primary_model=config.llm.primary_model or "gpt-4o",
             fallback_models=list(config.llm.fallback_models or []),
         )
